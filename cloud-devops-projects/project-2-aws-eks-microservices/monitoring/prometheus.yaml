@@ -1,0 +1,7 @@
+# Apply kube-prometheus-stack using Helm rather than maintaining a large generated manifest.
+# See README for installation commands.
+# This file documents the intended monitoring stack.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring

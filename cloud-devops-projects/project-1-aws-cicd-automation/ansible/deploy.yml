@@ -1,0 +1,31 @@
+---
+- name: Deploy Docker application
+  hosts: web
+  become: true
+  vars:
+    image: "ACCOUNT_ID.dkr.ecr.ap-south-1.amazonaws.com/aws-cicd-demo:latest"
+  tasks:
+    - name: Install Docker
+      ansible.builtin.dnf:
+        name: docker
+        state: present
+
+    - name: Start Docker
+      ansible.builtin.service:
+        name: docker
+        state: started
+        enabled: true
+
+    - name: Authenticate to ECR
+      ansible.builtin.shell: |
+        aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin ACCOUNT_ID.dkr.ecr.ap-south-1.amazonaws.com
+      changed_when: true
+
+    - name: Pull image
+      ansible.builtin.command: docker pull {{ image }}
+
+    - name: Run application
+      ansible.builtin.shell: |
+        docker rm -f aws-cicd-demo || true
+        docker run -d --name aws-cicd-demo -p 80:80 {{ image }}
+      changed_when: true

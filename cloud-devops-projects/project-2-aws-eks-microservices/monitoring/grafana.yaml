@@ -1,0 +1,9 @@
+# Grafana is installed as part of kube-prometheus-stack.
+# This placeholder documents the expected namespace.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-project-info
+  namespace: monitoring
+data:
+  project: "AWS EKS Microservices"

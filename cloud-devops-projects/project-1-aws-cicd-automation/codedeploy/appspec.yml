@@ -1,0 +1,18 @@
+version: 0.0
+os: linux
+files:
+  - source: application/index.html
+    destination: /opt/aws-cicd-demo/html
+hooks:
+  ApplicationStop:
+    - location: scripts/stop.sh
+      timeout: 30
+      runas: root
+  AfterInstall:
+    - location: scripts/install.sh
+      timeout: 60
+      runas: root
+  ApplicationStart:
+    - location: scripts/start.sh
+      timeout: 60
+      runas: root

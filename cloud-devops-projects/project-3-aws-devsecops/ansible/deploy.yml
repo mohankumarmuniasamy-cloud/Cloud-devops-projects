@@ -1,0 +1,33 @@
+---
+- name: Configure DevSecOps application server
+  hosts: web
+  become: true
+  vars:
+    image: "ACCOUNT_ID.dkr.ecr.ap-south-1.amazonaws.com/aws-devsecops-demo:latest"
+  tasks:
+    - name: Install Docker and AWS CLI
+      ansible.builtin.dnf:
+        name:
+          - docker
+          - awscli
+        state: present
+
+    - name: Enable Docker
+      ansible.builtin.service:
+        name: docker
+        state: started
+        enabled: true
+
+    - name: Login to ECR
+      ansible.builtin.shell: |
+        aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin ACCOUNT_ID.dkr.ecr.ap-south-1.amazonaws.com
+      changed_when: true
+
+    - name: Pull application image
+      ansible.builtin.command: docker pull {{ image }}
+
+    - name: Run application
+      ansible.builtin.shell: |
+        docker rm -f aws-devsecops-demo || true
+        docker run -d --name aws-devsecops-demo -p 80:80 {{ image }}
+      changed_when: true

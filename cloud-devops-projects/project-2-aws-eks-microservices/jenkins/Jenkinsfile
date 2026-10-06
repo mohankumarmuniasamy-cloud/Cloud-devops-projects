@@ -1,0 +1,51 @@
+pipeline {
+    agent any
+    environment {
+        AWS_REGION = 'ap-south-1'
+        ECR_REPO = 'eks-microservices-demo'
+        IMAGE_TAG = "${BUILD_NUMBER}"
+        EKS_CLUSTER = 'devops-eks-cluster'
+    }
+    stages {
+        stage('Checkout') { steps { checkout scm } }
+        stage('Build') {
+            steps { sh 'docker build -t ${ECR_REPO}:${IMAGE_TAG} -f docker/Dockerfile .' }
+        }
+        stage('Test') {
+            steps {
+                sh 'docker run -d --name eks-test ${ECR_REPO}:${IMAGE_TAG}'
+                sh 'sleep 3'
+                sh 'docker exec eks-test wget -qO- http://localhost/ | grep "AWS EKS Microservices"'
+            }
+            post { always { sh 'docker rm -f eks-test || true' } }
+        }
+        stage('Push ECR') {
+            steps {
+                sh '''
+                  ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+                  REGISTRY=${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
+                  aws ecr describe-repositories --repository-names ${ECR_REPO} --region ${AWS_REGION} >/dev/null 2>&1 || aws ecr create-repository --repository-name ${ECR_REPO} --region ${AWS_REGION}
+                  aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${REGISTRY}
+                  docker tag ${ECR_REPO}:${IMAGE_TAG} ${REGISTRY}/${ECR_REPO}:${IMAGE_TAG}
+                  docker push ${REGISTRY}/${ECR_REPO}:${IMAGE_TAG}
+                '''
+            }
+        }
+        stage('Deploy to EKS') {
+            steps {
+                sh '''
+                  aws eks update-kubeconfig --region ${AWS_REGION} --name ${EKS_CLUSTER}
+                  ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+                  IMAGE=${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:${IMAGE_TAG}
+                  kubectl apply -f kubernetes/namespace.yaml
+                  kubectl apply -f kubernetes/configmap.yaml
+                  kubectl apply -f kubernetes/secret.yaml
+                  kubectl apply -f kubernetes/deployment.yaml
+                  kubectl set image deployment/web-app web-app=${IMAGE} -n devops-demo
+                  kubectl apply -f kubernetes/service.yaml
+                  kubectl rollout status deployment/web-app -n devops-demo --timeout=180s
+                '''
+            }
+        }
+    }
+}
